@@ -21,3 +21,26 @@ class Conversation(Base):
 
     # updated_at ：更新时间，默认当前时间，每次更新时自动更新
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class User(Base):
+    # 表名 ：映射到数据库中的 users 表
+    __tablename__ = "users"
+
+    # id ：主键，自增，带索引
+    id = Column(Integer, primary_key=True, index=True)
+
+    # username ：用户名，字符串类型，不能为空，唯一
+    username = Column(String(50), nullable=False, unique=True, index=True)
+
+    # password ：密码，字符串类型，不能为空（实际应用中应该加密存储）
+    password = Column(String(255), nullable=False)
+
+    # email ：邮箱，字符串类型，不能为空，唯一
+    email = Column(String(100), nullable=False, unique=True, index=True)
+
+    # created_at ：创建时间，默认当前时间
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # updated_at ：更新时间，默认当前时间，每次更新时自动更新
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
