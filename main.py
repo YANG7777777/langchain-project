@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import root, ai
+from app.routes import root, ai, user
 from app.dependencies.middleware import add_cors_middleware
 
 
@@ -19,6 +19,7 @@ def create_app() -> FastAPI:
     # 注册路由
     _app.include_router(root.router)
     _app.include_router(ai.router)
+    _app.include_router(user.router)
 
     return _app
 

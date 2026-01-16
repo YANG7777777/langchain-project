@@ -36,8 +36,8 @@ class User(Base):
     # password ：密码，字符串类型，不能为空（实际应用中应该加密存储）
     password = Column(String(255), nullable=False)
 
-    # email ：邮箱，字符串类型，不能为空，唯一
-    email = Column(String(100), nullable=False, unique=True, index=True)
+    # email ：邮箱，字符串类型，可以为空，唯一
+    email = Column(String(100), nullable=True, unique=True, index=True)
 
     # created_at ：创建时间，默认当前时间
     created_at = Column(DateTime(timezone=True), server_default=func.now())
