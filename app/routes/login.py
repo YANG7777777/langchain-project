@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import bcrypt
 from app.utils.crypto import rsa_decrypt, get_public_key_string
+from app.utils.jwt import create_access_token
 
 router = APIRouter(tags=["Login"])
 
@@ -72,14 +73,20 @@ async def login(
                 data=None
             )
         
-        # 登录成功，返回用户信息（不包含密码）
+        # 登录成功，生成JWT Token
+        access_token = create_access_token(
+            data={"sub": record.username, "user_id": str(record.id)}
+        )
+        
+        # 返回用户信息和Token
         return UserResponse(
             status="ok",
             message="登录成功",
             data={
                 "id": record.id,
                 "username": record.username,
-                "email": record.email
+                "email": record.email,
+                "token": access_token
             }
         )
 
