@@ -87,11 +87,18 @@ async def users_add(
 ):
     try:
         from datetime import datetime
+        import bcrypt
         current_time = datetime.now()
+        
+        # 对密码进行哈希处理（bcrypt最大支持72字节，超过部分会被截断）
+        password_hash = None
+        if request.password:
+            truncated_password = request.password[:72]
+            password_hash = bcrypt.hashpw(truncated_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
         user_data = {
             "username": request.username,
-            "password": request.password,
+            "password": password_hash,
             "email": request.email,
             "created_at": current_time,
             "updated_at": current_time
@@ -146,11 +153,18 @@ async def users_update(
 ):
     try:
         from datetime import datetime
+        import bcrypt
         current_time = datetime.now()
+        
+        # 对密码进行哈希处理（bcrypt最大支持72字节，超过部分会被截断）
+        password_hash = None
+        if request.password:
+            truncated_password = request.password[:72]
+            password_hash = bcrypt.hashpw(truncated_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         
         update_data = {
             "username": request.username,
-            "password": request.password,
+            "password": password_hash,
             "email": request.email,
             "updated_at": current_time,
             "id": id

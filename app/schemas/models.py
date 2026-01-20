@@ -44,6 +44,10 @@ class UserUpdateRequest(BaseModel):
     password: Optional[str] = Field(None, min_length=6, max_length=255, description="密码")
     email: Optional[str] = Field(None, description="邮箱")
 
+class UserLoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50, description="用户名")
+    password: str = Field(..., min_length=6, max_length=512, description="密码")
+
 class DeepSeekResponse(BaseModel):
     answer: str = Field(..., description="回答内容")
 
