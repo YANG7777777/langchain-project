@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from app.dependencies.database import get_db
 from sqlalchemy import text
 from app.schemas.models import UserResponse, UserLoginRequest
@@ -161,3 +161,27 @@ async def login(
             status="error",
             message=f"登录失败: {str(e)}"
         )
+
+# 用户退出登录
+@router.post("/logout")
+async def logout(request: Request):
+    try:
+        print("Login.py: Logout request received")
+        # 这里可以添加清理逻辑，比如：
+        # 1. 从数据库中移除 token
+        # 2. 清理会话数据
+        # 3. 其他退出登录相关操作
+        
+        return {
+            "status": "ok",
+            "message": "退出登录成功",
+            "data": None
+        }
+    except Exception as e:
+        print(f"Login.py: Logout error: {e}")
+        return {
+            "status": "error",
+            "message": f"退出登录失败: {str(e)}",
+            "data": None
+        }
+
