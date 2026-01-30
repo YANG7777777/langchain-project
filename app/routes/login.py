@@ -139,8 +139,10 @@ async def login(
             message="登录成功",
             data={
                 "id": record.id,
-                "username": record.username,
-                "email": record.email,
+                "userInfo": {
+                    "username": record.username,
+                    "email": record.email
+                },
                 "token": access_token
             }
         )
