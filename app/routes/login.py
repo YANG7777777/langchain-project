@@ -5,8 +5,45 @@ from app.schemas.models import UserResponse, UserLoginRequest
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import bcrypt
+import sys
+print(f"Login.py: Python version: {sys.version}")
+print(f"Login.py: Python path: {sys.path}")
+
+# 尝试导入 jwt 模块
+print("Login.py: Attempting to import jwt module...")
+try:
+    import jwt
+    print(f"Login.py: jwt module imported successfully: {jwt}")
+    print(f"Login.py: jwt module attributes: {dir(jwt)}")
+    print(f"Login.py: Has encode attribute: {'encode' in dir(jwt)}")
+except Exception as e:
+    print(f"Login.py: Error importing jwt: {e}")
+
+import datetime
+from typing import Optional, Dict
 from app.utils.crypto import rsa_decrypt, get_public_key_string
-from app.utils.jwt import create_access_token
+
+# JWT配置
+SECRET_KEY = "your-secret-key-change-this-in-production"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+def create_access_token(data: Dict[str, str], expires_delta: Optional[datetime.timedelta] = None) -> str:
+    print("Login.py: create_access_token called")
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    print(f"Login.py: Data to encode: {to_encode}")
+    try:
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        print(f"Login.py: Token generated successfully: {encoded_jwt}")
+        return encoded_jwt
+    except Exception as e:
+        print(f"Login.py: Error generating token: {e}")
+        raise
 
 router = APIRouter(tags=["Login"])
 
@@ -35,7 +72,12 @@ async def login(
     request: UserLoginRequest,
     db: Session = Depends(get_db)
 ):
+    print("Login.py: Login request received")
+    print(f"Login.py: Username: {request.username}")
+    print(f"Login.py: Password: {request.password[:50]}...")
+    
     try:
+        print("Login.py: Querying user from database...")
         # 根据用户名查询用户
         result = db.execute(
             text("SELECT id, username, password, email FROM users WHERE username = :username LIMIT 1"),
@@ -43,30 +85,39 @@ async def login(
         )
         record = result.fetchone()
 
-        print('123', record)
+        print(f"Login.py: User record: {record}")
         if record is None:
+            print("Login.py: User not found")
             return UserResponse(
                 status="error",
                 message="用户名或密码错误1",
                 data=None
             )
         
-        print('1234request', request.password)
-        print('1234record', record.password)
+        print(f"Login.py: User found: {record.username}")
+        print(f"Login.py: Stored password: {record.password}")
 
         # 解密密码
+        print("Login.py: Decrypting password...")
         try:
             # 尝试解密密码（如果是加密的）
             decrypted_password = rsa_decrypt(request.password)
-            print('1234decrypted', decrypted_password)
+            print(f"Login.py: Decrypted password: {decrypted_password}")
         except Exception as e:
             # 如果解密失败，可能是明文密码（用于向后兼容）
-            print(f'解密失败，使用明文密码: {e}')
+            print(f"Login.py: Decryption failed, using plain password: {e}")
             decrypted_password = request.password
 
         # 验证密码（bcrypt最大支持72字节，超过部分会被截断）
+        print("Login.py: Verifying password...")
         truncated_password = decrypted_password[:72]
-        if not bcrypt.checkpw(truncated_password.encode('utf-8'), record.password.encode('utf-8')):
+        print(f"Login.py: Truncated password: {truncated_password}")
+        
+        is_valid = bcrypt.checkpw(truncated_password.encode('utf-8'), record.password.encode('utf-8'))
+        print(f"Login.py: Password validation result: {is_valid}")
+        
+        if not is_valid:
+            print("Login.py: Password validation failed")
             return UserResponse(
                 status="error",
                 message="用户名或密码错误2",
@@ -74,11 +125,15 @@ async def login(
             )
         
         # 登录成功，生成JWT Token
+        print("Login.py: Generating JWT token...")
         access_token = create_access_token(
             data={"sub": record.username, "user_id": str(record.id)}
         )
         
+        print(f"Login.py: Token generated: {access_token}")
+        
         # 返回用户信息和Token
+        print("Login.py: Returning success response")
         return UserResponse(
             status="ok",
             message="登录成功",
@@ -91,11 +146,15 @@ async def login(
         )
 
     except SQLAlchemyError as e:
+        print(f"Login.py: Database error: {e}")
         return UserResponse(
             status="error",
             message=f"数据库查询失败: {str(e)}"
         )
     except Exception as e:
+        print(f"Login.py: General error: {e}")
+        import traceback
+        traceback.print_exc()
         return UserResponse(
             status="error",
             message=f"登录失败: {str(e)}"
