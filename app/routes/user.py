@@ -10,27 +10,42 @@ router = APIRouter(tags=["Users"])
 
 
 # 获取用户详情
-@router.get("/users/detail/{id}", response_model=UserResponse)
+@router.get("/users/detail/{id}")
 async def users_detail(
     id: int,
     db: Session = Depends(get_db)
 ):
     try:
-        result = db.execute(text("SELECT * FROM users WHERE id = :id LIMIT 1"), {"id": id})
+        # 使用 SQL 函数直接格式化日期
+        result = db.execute(
+            text("""
+                SELECT id, username, email, 
+                       DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as created_at,
+                       DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') as updated_at
+                FROM users WHERE id = :id LIMIT 1
+            """), 
+            {"id": id}
+        )
         record = result.fetchone()
 
         if record is None:
-            return UserResponse(
-                status="ok",
-                message="Database connected, but no record found",
-                data=None
-            )
+            return {
+                "status": "ok",
+                "message": "Database connected, but no record found",
+                "data": None
+            }
         
-        return UserResponse(
-            status="ok",
-            message="Database connection successful",
-            data={"id": record.id, "username": record.username, "email": record.email}
-        )
+        return {
+            "status": "ok",
+            "message": "Database connection successful",
+            "data": {
+                "id": record.id, 
+                "username": record.username, 
+                "email": record.email,
+                "created_at": record.created_at,
+                "updated_at": record.updated_at
+            }
+        }
 
     except SQLAlchemyError as e:
         return UserResponse(
@@ -44,55 +59,87 @@ async def users_detail(
         )
 
 
-# 获取所有用户（支持按 id 和 username 过滤）
-@router.get("/users/all", response_model=UserListResponse)
+# 获取所有用户（支持按 id 和 username 过滤，支持分页）
+@router.get("/users/all")
 async def users_all(
     id: Optional[int] = None,
     username: Optional[str] = None,
+    current: int = 1,
+    pageSize: int = 10,
     db: Session = Depends(get_db)
 ):
+    print('id, username, current, pageSize: ', id, username, current, pageSize)
     try:
         # 构建查询条件
-        query_parts = ["SELECT id, username, email FROM users WHERE 1=1"]
+        where_parts = ["WHERE 1=1"]
         params = {}
         
         if id is not None:
-            query_parts.append("AND id = :id")
+            where_parts.append("AND id = :id")
             params["id"] = id
         
         if username is not None:
-            query_parts.append("AND username = :username")
+            where_parts.append("AND username = :username")
             params["username"] = username
         
-        sql = " ".join(query_parts)
-        result = db.execute(text(sql), params)
+        where_clause = " ".join(where_parts)
+        
+        # 查询总记录数
+        count_sql = f"SELECT COUNT(*) as total FROM users {where_clause}"
+        count_result = db.execute(text(count_sql), params)
+        total = count_result.fetchone().total
+        
+        # 计算分页偏移量
+        offset = (current - 1) * pageSize
+        
+        # 查询分页数据，添加日期字段
+        data_sql = f"""
+            SELECT id, username, email, 
+                   DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as created_at,
+                   DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') as updated_at
+            FROM users {where_clause}
+            LIMIT :limit OFFSET :offset
+        """
+        params["limit"] = pageSize
+        params["offset"] = offset
+        
+        result = db.execute(text(data_sql), params)
         records = result.fetchall()
 
-        if not records:
-            return UserListResponse(
-                status="ok",
-                message="No users found",
-                data=None
-            )
+        # 构建用户列表
+        user_list = []
+        for record in records:
+            user_list.append({
+                "id": record.id, 
+                "username": record.username, 
+                "email": record.email,
+                "created_at": record.created_at,
+                "updated_at": record.updated_at
+            })
         
-        user_list = [{"id": record.id, "username": record.username, "email": record.email} for record in records]
-        
-        return UserListResponse(
-            status="ok",
-            message="All users retrieved successfully",
-            data=user_list
-        )
+        return {
+            "status": "ok",
+            "message": "All users retrieved successfully",
+            "data": {
+                "list": user_list,
+                "total": total,
+                "current": current,
+                "pageSize": pageSize
+            }
+        }
 
     except SQLAlchemyError as e:
-        return UserListResponse(
-            status="error",
-            message=f"Database query failed: {str(e)}"
-        )
+        return {
+            "status": "error",
+            "message": f"Database query failed: {str(e)}",
+            "data": None
+        }
     except Exception as e:
-        return UserListResponse(
-            status="error",
-            message=f"Unexpected error: {str(e)}"
-        )
+        return {
+            "status": "error",
+            "message": f"Unexpected error: {str(e)}",
+            "data": None
+        }
 
 
 # 新增用户
