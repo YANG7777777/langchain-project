@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from typing import Optional
 from app.dependencies.database import get_db
 from sqlalchemy import text
 from app.schemas.models import UserResponse, UserListResponse, UserAddRequest, UserUpdateRequest
@@ -43,13 +44,28 @@ async def users_detail(
         )
 
 
-# 获取所有用户
+# 获取所有用户（支持按 id 和 username 过滤）
 @router.get("/users/all", response_model=UserListResponse)
 async def users_all(
+    id: Optional[int] = None,
+    username: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     try:
-        result = db.execute(text("SELECT id, username, email FROM users"))
+        # 构建查询条件
+        query_parts = ["SELECT id, username, email FROM users WHERE 1=1"]
+        params = {}
+        
+        if id is not None:
+            query_parts.append("AND id = :id")
+            params["id"] = id
+        
+        if username is not None:
+            query_parts.append("AND username = :username")
+            params["username"] = username
+        
+        sql = " ".join(query_parts)
+        result = db.execute(text(sql), params)
         records = result.fetchall()
 
         if not records:
