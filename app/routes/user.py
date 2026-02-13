@@ -62,21 +62,54 @@ async def users_detail(
 # 获取所有用户（支持按 id 和 username 过滤，支持分页）
 @router.get("/users/all")
 async def users_all(
-    id: Optional[int] = None,
+    id: Optional[str] = None,
     username: Optional[str] = None,
-    current: int = 1,
-    pageSize: int = 10,
+    current: str = "1",
+    pageSize: str = "10",
     db: Session = Depends(get_db)
 ):
     print('id, username, current, pageSize: ', id, username, current, pageSize)
     try:
+        # 类型转换和验证
+        try:
+            current_int = int(current)
+            pageSize_int = int(pageSize)
+        except (ValueError, TypeError):
+            return {
+                "status": "ok",
+                "message": "Invalid pagination parameters",
+                "data": {
+                    "list": [],
+                    "total": 0,
+                    "current": 1,
+                    "pageSize": 10
+                }
+            }
+        
+        # 转换 id 参数
+        id_int = None
+        if id is not None:
+            try:
+                id_int = int(id)
+            except (ValueError, TypeError):
+                return {
+                    "status": "ok",
+                    "message": "Invalid id parameter",
+                    "data": {
+                        "list": [],
+                        "total": 0,
+                        "current": current_int,
+                        "pageSize": pageSize_int
+                    }
+                }
+        
         # 构建查询条件
         where_parts = ["WHERE 1=1"]
         params = {}
         
-        if id is not None:
+        if id_int is not None:
             where_parts.append("AND id = :id")
-            params["id"] = id
+            params["id"] = id_int
         
         if username is not None:
             where_parts.append("AND username = :username")
@@ -90,7 +123,7 @@ async def users_all(
         total = count_result.fetchone().total
         
         # 计算分页偏移量
-        offset = (current - 1) * pageSize
+        offset = (current_int - 1) * pageSize_int
         
         # 查询分页数据，添加日期字段
         data_sql = f"""
@@ -100,7 +133,7 @@ async def users_all(
             FROM users {where_clause}
             LIMIT :limit OFFSET :offset
         """
-        params["limit"] = pageSize
+        params["limit"] = pageSize_int
         params["offset"] = offset
         
         result = db.execute(text(data_sql), params)
@@ -123,8 +156,8 @@ async def users_all(
             "data": {
                 "list": user_list,
                 "total": total,
-                "current": current,
-                "pageSize": pageSize
+                "current": current_int,
+                "pageSize": pageSize_int
             }
         }
 
