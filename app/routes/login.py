@@ -47,6 +47,15 @@ def create_access_token(data: Dict[str, str], expires_delta: Optional[datetime.t
 
 router = APIRouter(tags=["Login"])
 
+ROLE_MAP = {
+    0: "超管",
+    1: "管理员",
+    2: "用户"
+}
+
+def get_role_name(code: int) -> str:
+    return ROLE_MAP.get(code, "用户")
+
 
 # 获取RSA公钥
 @router.get("/login/public-key", response_model=dict)
@@ -75,12 +84,11 @@ async def login(
     print("Login.py: Login request received")
     print(f"Login.py: Username: {request.username}")
     print(f"Login.py: Password: {request.password[:50]}...")
-    
+
     try:
         print("Login.py: Querying user from database...")
-        # 根据用户名查询用户
         result = db.execute(
-            text("SELECT id, username, password, email FROM users WHERE username = :username LIMIT 1"),
+            text("SELECT id, username, password, email, role FROM users WHERE username = :username LIMIT 1"),
             {"username": request.username}
         )
         record = result.fetchone()
@@ -93,18 +101,16 @@ async def login(
                 message="用户名或密码错误1",
                 data=None
             )
-        
+
         print(f"Login.py: User found: {record.username}")
         print(f"Login.py: Stored password: {record.password}")
 
         # 解密密码
         print("Login.py: Decrypting password...")
         try:
-            # 尝试解密密码（如果是加密的）
             decrypted_password = rsa_decrypt(request.password)
             print(f"Login.py: Decrypted password: {decrypted_password}")
         except Exception as e:
-            # 如果解密失败，可能是明文密码（用于向后兼容）
             print(f"Login.py: Decryption failed, using plain password: {e}")
             decrypted_password = request.password
 
@@ -112,10 +118,10 @@ async def login(
         print("Login.py: Verifying password...")
         truncated_password = decrypted_password[:72]
         print(f"Login.py: Truncated password: {truncated_password}")
-        
+
         is_valid = bcrypt.checkpw(truncated_password.encode('utf-8'), record.password.encode('utf-8'))
         print(f"Login.py: Password validation result: {is_valid}")
-        
+
         if not is_valid:
             print("Login.py: Password validation failed")
             return UserResponse(
@@ -123,15 +129,17 @@ async def login(
                 message="用户名或密码错误2",
                 data=None
             )
-        
+
         # 登录成功，生成JWT Token
         print("Login.py: Generating JWT token...")
         access_token = create_access_token(
-            data={"sub": record.username, "user_id": str(record.id)}
+            data={"sub": record.username, "user_id": str(record.id), "role": str(record.role)}
         )
-        
+
         print(f"Login.py: Token generated: {access_token}")
-        
+
+        role_name = get_role_name(record.role) if record.role is not None else "用户"
+
         # 返回用户信息和Token
         print("Login.py: Returning success response")
         return UserResponse(
@@ -141,7 +149,9 @@ async def login(
                 "id": record.id,
                 "userInfo": {
                     "username": record.username,
-                    "email": record.email
+                    "email": record.email,
+                    "role": record.role,
+                    "role_name": role_name
                 },
                 "token": access_token
             }
@@ -167,11 +177,7 @@ async def login(
 async def logout(request: Request):
     try:
         print("Login.py: Logout request received")
-        # 这里可以添加清理逻辑，比如：
-        # 1. 从数据库中移除 token
-        # 2. 清理会话数据
-        # 3. 其他退出登录相关操作
-        
+
         return {
             "status": "ok",
             "message": "退出登录成功",
@@ -184,4 +190,3 @@ async def logout(request: Request):
             "message": f"退出登录失败: {str(e)}",
             "data": None
         }
-

@@ -38,11 +38,13 @@ class UserAddRequest(BaseModel):
     username: Optional[str] = Field(None, min_length=1, max_length=50, description="用户名")
     password: Optional[str] = Field(None, min_length=6, max_length=255, description="密码")
     email: Optional[str] = Field(None, description="邮箱")
+    role: Optional[int] = Field(2, ge=0, le=2, description="角色: 0-超管, 1-管理员, 2-用户")
 
 class UserUpdateRequest(BaseModel):
     username: Optional[str] = Field(None, min_length=1, max_length=50, description="用户名")
     password: Optional[str] = Field(None, min_length=6, max_length=255, description="密码")
     email: Optional[str] = Field(None, description="邮箱")
+    role: Optional[int] = Field(None, ge=0, le=2, description="角色: 0-超管, 1-管理员, 2-用户")
 
 class UserLoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=50, description="用户名")

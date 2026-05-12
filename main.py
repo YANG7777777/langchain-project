@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import blogs, ai, user, login
+from app.routes import blogs, ai, user, login, roles
 from app.dependencies.middleware import add_cors_middleware
 
 
@@ -7,7 +7,7 @@ def create_app() -> FastAPI:
     # 初始化加密模块
     from app.utils.crypto import init_crypto
     init_crypto()
-    
+
     _app = FastAPI(
         description="LangChain RAG API with FastAPI",
         version="0.1.0",
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
     _app.include_router(ai.router)
     _app.include_router(user.router)
     _app.include_router(login.router)
+    _app.include_router(roles.router)
 
     return _app
 
