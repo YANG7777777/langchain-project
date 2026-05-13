@@ -22,15 +22,15 @@ class DepartmentListResponse(BaseModel):
 
 
 class DepartmentAddRequest(BaseModel):
-    dept_name: str = Field(..., min_length=1, max_length=100, description="部门名称")
+    dept_name: Optional[str] = Field(None, min_length=1, max_length=100, description="部门名称，不填则使用dept_code")
     dept_code: Optional[str] = Field(None, max_length=50, description="部门编码")
-    parent_id: Optional[int] = Field(None, description="上级部门ID")
+    parent_dept_code: Optional[str] = Field(None, max_length=50, description="上级部门编码")
 
 
 class DepartmentUpdateRequest(BaseModel):
     dept_name: Optional[str] = Field(None, min_length=1, max_length=100, description="部门名称")
     dept_code: Optional[str] = Field(None, max_length=50, description="部门编码")
-    parent_id: Optional[int] = Field(None, description="上级部门ID")
+    parent_dept_code: Optional[str] = Field(None, max_length=50, description="上级部门编码")
 
 
 # 获取所有部门（支持按 id 和 dept_name 过滤）
@@ -173,6 +173,75 @@ async def departments_add(
         from datetime import datetime
         current_time = datetime.now()
 
+        if not request.dept_name and request.dept_code:
+            request.dept_name = request.dept_code
+
+        if not request.dept_name:
+            return {
+                "status": "error",
+                "message": "Department name or dept_code is required",
+                "data": None
+            }
+
+        if request.dept_code:
+            check_result = db.execute(
+                text("SELECT id, dept_name FROM departments WHERE dept_code = :dept_code LIMIT 1"),
+                {"dept_code": request.dept_code}
+            )
+            existing_dept = check_result.fetchone()
+            if existing_dept:
+                parent_name = None
+                parent_id = None
+                if request.parent_dept_code is not None:
+                    parent_result = db.execute(
+                        text("SELECT id, dept_name FROM departments WHERE dept_code = :parent_dept_code LIMIT 1"),
+                        {"parent_dept_code": request.parent_dept_code}
+                    )
+                    parent_record = parent_result.fetchone()
+                    if parent_record:
+                        parent_id = parent_record.id
+                        parent_name = parent_record.dept_name
+                    else:
+                        return {
+                            "status": "error",
+                            "message": f"Parent department with code {request.parent_dept_code} not found",
+                            "data": None
+                        }
+
+                update_fields = []
+                update_values = {}
+                if request.dept_name and request.dept_name != existing_dept.dept_name:
+                    update_fields.append("dept_name = :dept_name")
+                    update_values["dept_name"] = request.dept_name
+                if parent_id is not None:
+                    update_fields.append("parent_id = :parent_id")
+                    update_values["parent_id"] = parent_id
+                if parent_name is not None:
+                    update_fields.append("parent_name = :parent_name")
+                    update_values["parent_name"] = parent_name
+                update_fields.append("updater_id = :updater_id")
+                update_fields.append("updated_at = :updated_at")
+                update_values["updater_id"] = creator_id
+                update_values["updated_at"] = current_time
+                update_values["dept_code"] = request.dept_code
+
+                if update_fields:
+                    update_sql = text(f"UPDATE departments SET {', '.join(update_fields)} WHERE dept_code = :dept_code")
+                    db.execute(update_sql, update_values)
+                    db.commit()
+
+                return {
+                    "status": "ok",
+                    "message": "Department updated successfully",
+                    "data": {
+                        "id": existing_dept.id,
+                        "dept_name": request.dept_name or existing_dept.dept_name,
+                        "dept_code": request.dept_code,
+                        "parent_id": parent_id,
+                        "parent_name": parent_name
+                    }
+                }
+
         if request.dept_name:
             check_result = db.execute(
                 text("SELECT COUNT(*) as count FROM departments WHERE dept_name = :dept_name"),
@@ -186,32 +255,21 @@ async def departments_add(
                     "data": None
                 }
 
-        if request.dept_code:
-            check_result = db.execute(
-                text("SELECT COUNT(*) as count FROM departments WHERE dept_code = :dept_code"),
-                {"dept_code": request.dept_code}
-            )
-            count = check_result.fetchone().count
-            if count > 0:
-                return {
-                    "status": "error",
-                    "message": f"Department code '{request.dept_code}' already exists",
-                    "data": None
-                }
-
         parent_name = None
-        if request.parent_id is not None:
+        parent_id = None
+        if request.parent_dept_code is not None:
             parent_result = db.execute(
-                text("SELECT dept_name FROM departments WHERE id = :parent_id LIMIT 1"),
-                {"parent_id": request.parent_id}
+                text("SELECT id, dept_name FROM departments WHERE dept_code = :parent_dept_code LIMIT 1"),
+                {"parent_dept_code": request.parent_dept_code}
             )
             parent_record = parent_result.fetchone()
             if parent_record:
+                parent_id = parent_record.id
                 parent_name = parent_record.dept_name
             else:
                 return {
                     "status": "error",
-                    "message": f"Parent department with id {request.parent_id} not found",
+                    "message": f"Parent department with code {request.parent_dept_code} not found",
                     "data": None
                 }
 
@@ -225,7 +283,7 @@ async def departments_add(
         result = db.execute(sql, {
             "dept_name": request.dept_name,
             "dept_code": request.dept_code,
-            "parent_id": request.parent_id,
+            "parent_id": parent_id,
             "parent_name": parent_name,
             "creator_id": creator_id,
             "updater_id": updater_id,
@@ -244,7 +302,7 @@ async def departments_add(
                 "id": result.lastrowid,
                 "dept_name": request.dept_name,
                 "dept_code": request.dept_code,
-                "parent_id": request.parent_id,
+                "parent_id": parent_id,
                 "parent_name": parent_name,
                 "creator_id": creator_id,
                 "updater_id": updater_id,
@@ -308,25 +366,27 @@ async def departments_update(
                 }
 
         parent_name = None
-        if request.parent_id is not None:
+        parent_id = None
+        if request.parent_dept_code is not None:
             parent_result = db.execute(
-                text("SELECT dept_name FROM departments WHERE id = :parent_id LIMIT 1"),
-                {"parent_id": request.parent_id}
+                text("SELECT id, dept_name FROM departments WHERE dept_code = :parent_dept_code LIMIT 1"),
+                {"parent_dept_code": request.parent_dept_code}
             )
             parent_record = parent_result.fetchone()
             if parent_record:
+                parent_id = parent_record.id
                 parent_name = parent_record.dept_name
             else:
                 return {
                     "status": "error",
-                    "message": f"Parent department with id {request.parent_id} not found",
+                    "message": f"Parent department with code {request.parent_dept_code} not found",
                     "data": None
                 }
 
         update_data = {
             "dept_name": request.dept_name,
             "dept_code": request.dept_code,
-            "parent_id": request.parent_id,
+            "parent_id": parent_id,
             "parent_name": parent_name,
             "updater_id": updater_id,
             "updated_at": current_time,

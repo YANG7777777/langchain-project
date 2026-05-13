@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routes import blogs, ai, user, login, roles, departments
+from app.routes import blogs, ai, user, login, roles, departments, userInfo
 from app.dependencies.middleware import add_cors_middleware
 
 
@@ -27,6 +27,7 @@ def create_app() -> FastAPI:
     _app.include_router(login.router)
     _app.include_router(roles.router)
     _app.include_router(departments.router)
+    _app.include_router(userInfo.router)
 
     return _app
 
