@@ -24,10 +24,12 @@ class RoleListResponse(BaseModel):
 class RoleAddRequest(BaseModel):
     role_name: str = Field(..., min_length=1, max_length=50, description="角色名称")
     role_code: Optional[int] = Field(None, description="角色代码")
+    role_id: Optional[int] = Field(None, description="父角色ID，关联角色表")
 
 
 class RoleUpdateRequest(BaseModel):
     role_name: Optional[str] = Field(None, min_length=1, max_length=50, description="角色名称")
+    role_id: Optional[int] = Field(None, description="父角色ID，关联角色表")
 
 
 # 获取所有角色
@@ -55,7 +57,7 @@ async def roles_all(
 
         result = db.execute(
             text(f"""
-                SELECT id, role_name, role_code, creator_id, updater_id,
+                SELECT id, role_name, role_code, role_id, creator_id, updater_id,
                        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as created_at,
                        DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') as updated_at
                 FROM roles
@@ -72,6 +74,7 @@ async def roles_all(
                 "id": record.id,
                 "role_name": record.role_name,
                 "role_code": record.role_code,
+                "role_id": record.role_id,
                 "creator_id": record.creator_id,
                 "updater_id": record.updater_id,
                 "created_at": record.created_at,
@@ -81,10 +84,7 @@ async def roles_all(
         return {
             "status": "ok",
             "message": "All roles retrieved successfully",
-            "data": {
-                "list": role_list,
-                "total": len(role_list)
-            }
+            "data": role_list
         }
 
     except SQLAlchemyError as e:
@@ -110,7 +110,7 @@ async def roles_detail(
     try:
         result = db.execute(
             text("""
-                SELECT id, role_name, role_code, creator_id, updater_id,
+                SELECT id, role_name, role_code, role_id, creator_id, updater_id,
                        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as created_at,
                        DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') as updated_at
                 FROM roles WHERE id = :id LIMIT 1
@@ -133,6 +133,7 @@ async def roles_detail(
                 "id": record.id,
                 "role_name": record.role_name,
                 "role_code": record.role_code,
+                "role_id": record.role_id,
                 "creator_id": record.creator_id,
                 "updater_id": record.updater_id,
                 "created_at": record.created_at,
@@ -170,18 +171,20 @@ async def roles_add(
         new_id = max_id + 1
 
         role_code = request.role_code if request.role_code is not None else new_id
+        role_id = request.role_id
 
         updater_id = creator_id + 1 if creator_id is not None else None
 
         sql = text("""
-            INSERT INTO roles (id, role_name, role_code, creator_id, updater_id, created_at, updated_at)
-            VALUES (:id, :role_name, :role_code, :creator_id, :updater_id, :created_at, :updated_at)
+            INSERT INTO roles (id, role_name, role_code, role_id, creator_id, updater_id, created_at, updated_at)
+            VALUES (:id, :role_name, :role_code, :role_id, :creator_id, :updater_id, :created_at, :updated_at)
         """)
 
         result = db.execute(sql, {
             "id": new_id,
             "role_name": request.role_name,
             "role_code": role_code,
+            "role_id": role_id,
             "creator_id": creator_id,
             "updater_id": updater_id,
             "created_at": current_time,
@@ -199,6 +202,7 @@ async def roles_add(
                 "id": new_id,
                 "role_name": request.role_name,
                 "role_code": role_code,
+                "role_id": role_id,
                 "creator_id": creator_id,
                 "updater_id": updater_id,
                 "created_at": created_at_str,
@@ -236,6 +240,7 @@ async def roles_update(
 
         update_data = {
             "role_name": request.role_name,
+            "role_id": request.role_id,
             "updater_id": updater_id,
             "updated_at": current_time,
             "id": id
@@ -273,7 +278,7 @@ async def roles_update(
 
         select_result = db.execute(
             text("""
-                SELECT id, role_name, role_code, creator_id, updater_id,
+                SELECT id, role_name, role_code, role_id, creator_id, updater_id,
                        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as created_at
                 FROM roles WHERE id = :id LIMIT 1
             """),
@@ -288,6 +293,7 @@ async def roles_update(
                 "id": record.id,
                 "role_name": record.role_name,
                 "role_code": record.role_code,
+                "role_id": record.role_id,
                 "creator_id": record.creator_id,
                 "updater_id": updater_id,
                 "created_at": record.created_at,
@@ -318,19 +324,6 @@ async def roles_delete(
     db: Session = Depends(get_db)
 ):
     try:
-        check_result = db.execute(
-            text("SELECT COUNT(*) as count FROM users WHERE role = (SELECT role_code FROM roles WHERE id = :id)"),
-            {"id": id}
-        )
-        count = check_result.fetchone().count
-
-        if count > 0:
-            return {
-                "status": "error",
-                "message": f"Cannot delete role: {count} user(s) are using this role",
-                "data": None
-            }
-
         result = db.execute(text("DELETE FROM roles WHERE id = :id"), {"id": id})
         db.commit()
 
