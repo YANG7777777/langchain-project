@@ -146,8 +146,8 @@ async def login(
             status="ok",
             message="登录成功",
             data={
-                "id": record.id,
                 "userInfo": {
+                    "id": record.id,
                     "username": record.username,
                     "email": record.email,
                     "role": record.role,
