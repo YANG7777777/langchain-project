@@ -135,3 +135,27 @@ class Employee(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
+class ClockRecord(Base):
+    __tablename__ = "clock_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    employee_id = Column(Integer, nullable=False, index=True)
+
+    employee_name = Column(String(100), nullable=True)
+
+    clock_in_time = Column(DateTime(timezone=True), nullable=True)
+
+    clock_out_time = Column(DateTime(timezone=True), nullable=True)
+
+    date = Column(String(20), nullable=False, index=True)
+
+    status = Column(Integer, nullable=True, default=0)
+
+    remark = Column(String(500), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())

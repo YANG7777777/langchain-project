@@ -20,6 +20,7 @@ def create_app() -> FastAPI:
 
     # 注册路由（延迟导入以支持热重载）
     from app.routes import blogs, ai, user, login, roles, departments, userInfo, permission
+    from app.routes.clock_records import router as clock_records_router
     _app.include_router(blogs.router)
     _app.include_router(ai.router)
     _app.include_router(user.router)
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     _app.include_router(departments.router)
     _app.include_router(userInfo.router)
     _app.include_router(permission.router)
+    _app.include_router(clock_records_router)
     return _app
 
 
