@@ -444,6 +444,18 @@ async def employees_add(
                 "data": None
             }
 
+        # 检查邮箱是否已存在（在users表中）
+        email_check = db.execute(
+            text("SELECT id FROM users WHERE email = :email LIMIT 1"),
+            {"email": request.email}
+        )
+        if email_check.fetchone():
+            return {
+                "status": "error",
+                "message": f"Email '{request.email}' already exists",
+                "data": None
+            }
+
         updater_id = creator_id + 1 if creator_id is not None else None
 
         sql = text("""
@@ -652,11 +664,15 @@ async def employees_update(
                        DATE_FORMAT(e.confirmation_date, '%Y-%m-%d') as confirmation_date,
                        DATE_FORMAT(e.resignation_date, '%Y-%m-%d') as resignation_date,
                        e.status, e.salary, e.education,
+                       r.id as role_id,
+                       u.role as role_code,
                        e.creator_id, e.updater_id,
                        DATE_FORMAT(e.created_at, '%Y-%m-%d %H:%i:%s') as created_at,
                        DATE_FORMAT(e.updated_at, '%Y-%m-%d %H:%i:%s') as updated_at
                 FROM employees e
                 LEFT JOIN departments d ON e.dept_code = d.dept_code
+                LEFT JOIN users u ON u.email = e.email
+                LEFT JOIN roles r ON u.role = r.role_code
                 WHERE e.id = :id LIMIT 1
             """),
             {"id": id}
@@ -682,6 +698,8 @@ async def employees_update(
                 "status": record.status,
                 "salary": record.salary,
                 "education": record.education,
+                "role_id": record.role_id,
+                "role_code": record.role_code,
                 "creator_id": record.creator_id,
                 "updater_id": record.updater_id,
                 "created_at": record.created_at,
