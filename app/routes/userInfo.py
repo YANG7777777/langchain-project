@@ -514,10 +514,11 @@ async def employees_add(
             # 插入用户数据
             db.execute(
                 text("""
-                    INSERT INTO users (username, password, email, role, created_at, updated_at)
-                    VALUES (:username, :password, :email, :role, :created_at, :updated_at)
+                    INSERT INTO users (id, username, password, email, role, created_at, updated_at)
+                    VALUES (:id, :username, :password, :email, :role, :created_at, :updated_at)
                 """),
                 {
+                    "id": new_id,
                     "username": username,
                     "password": password_hash,
                     "email": request.email,
