@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
     from app.routes import blogs, ai, user, login, roles, departments, userInfo, permission
     from app.routes.clock_records import router as clock_records_router
     from app.routes.ask_leave import router as ask_leave_router
+    from app.routes.overtime_requests import router as overtime_requests_router
     _app.include_router(blogs.router)
     _app.include_router(ai.router)
     _app.include_router(user.router)
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     _app.include_router(permission.router)
     _app.include_router(clock_records_router)
     _app.include_router(ask_leave_router)
+    _app.include_router(overtime_requests_router)
     return _app
 
 
