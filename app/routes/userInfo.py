@@ -38,6 +38,7 @@ class EmployeeAddRequest(BaseModel):
     salary: Optional[int] = Field(None, description="薪资")
     education: Optional[str] = Field(None, max_length=50, description="学历")
     role: Optional[int] = Field(2, ge=0, le=2, description="角色: 0-超管, 1-管理员, 2-员工")
+    approver_id: Optional[int] = Field(None, description="上级领导人ID")
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -285,6 +286,8 @@ async def employees_all(
                        DATE_FORMAT(e.confirmation_date, '%Y-%m-%d') as confirmation_date,
                        DATE_FORMAT(e.resignation_date, '%Y-%m-%d') as resignation_date,
                        e.status, e.salary, e.education,
+                       e.approver_id,
+                       approver.name as approver_name,
                        e.creator_id, e.updater_id,
                        DATE_FORMAT(e.created_at, '%Y-%m-%d %H:%i:%s') as created_at,
                        DATE_FORMAT(e.updated_at, '%Y-%m-%d %H:%i:%s') as updated_at,
@@ -294,6 +297,7 @@ async def employees_all(
                 LEFT JOIN departments d ON e.dept_code = d.dept_code
                 LEFT JOIN users u ON u.email = e.email
                 LEFT JOIN roles r ON u.role = r.role_code
+                LEFT JOIN employees approver ON e.approver_id = approver.id
                 {where_sql}
                 ORDER BY e.id ASC
             """),
@@ -319,6 +323,8 @@ async def employees_all(
                 "status": record.status,
                 "salary": record.salary,
                 "education": record.education,
+                "approver_id": record.approver_id,
+                "approver_name": record.approver_name,
                 "role_id": record.role_id,
                 "role_code": record.role_code,
                 "creator_id": record.creator_id,
@@ -460,10 +466,10 @@ async def employees_add(
 
         sql = text("""
             INSERT INTO employees (name, gender, birthday, phone, email, dept_code, department_name, position,
-                                  hire_date, confirmation_date, status, salary, education,
+                                  hire_date, confirmation_date, status, salary, education, approver_id,
                                   creator_id, updater_id, created_at, updated_at)
             VALUES (:name, :gender, :birthday, :phone, :email, :dept_code, :department_name, :position,
-                    :hire_date, :confirmation_date, :status, :salary, :education,
+                    :hire_date, :confirmation_date, :status, :salary, :education, :approver_id,
                     :creator_id, :updater_id, :created_at, :updated_at)
         """)
 
@@ -481,6 +487,7 @@ async def employees_add(
             "status": request.status,
             "salary": request.salary,
             "education": request.education,
+            "approver_id": request.approver_id,
             "creator_id": creator_id,
             "updater_id": updater_id,
             "created_at": now,
@@ -564,6 +571,59 @@ async def employees_add(
         }
     except Exception as e:
         db.rollback()
+        return {
+            "status": "error",
+            "message": f"Unexpected error: {str(e)}",
+            "data": None
+        }
+
+
+@router.get("/employees/admins")
+async def get_all_admins(db: Session = Depends(get_db)):
+    """获取所有管理员"""
+    try:
+        query = text("""
+            SELECT e.id, e.name, e.gender, e.phone, e.email,
+                   e.dept_code, e.department_name, e.position,
+                   e.status,
+                   u.role,
+                   r.role_id, r.role_name, r.role_code
+            FROM employees e
+            LEFT JOIN users u ON e.id = u.id
+            LEFT JOIN roles r ON u.role = r.role_id
+            WHERE u.role = 1
+            ORDER BY e.id DESC
+        """)
+        result = db.execute(query)
+        records = []
+        for row in result:
+            records.append({
+                "id": row.id,
+                "name": row.name,
+                "gender": row.gender,
+                "phone": row.phone,
+                "email": row.email,
+                "dept_code": row.dept_code,
+                "department_name": row.department_name,
+                "position": row.position,
+                "status": row.status,
+                "role": row.role,
+                "role_id": row.role_id,
+                "role_name": row.role_name,
+                "role_code": row.role_code
+            })
+        return {
+            "status": "ok",
+            "message": "Admins retrieved successfully",
+            "data": records
+        }
+    except SQLAlchemyError as e:
+        return {
+            "status": "error",
+            "message": f"Database query failed: {str(e)}",
+            "data": None
+        }
+    except Exception as e:
         return {
             "status": "error",
             "message": f"Unexpected error: {str(e)}",
@@ -731,7 +791,26 @@ async def employees_delete(
     db: Session = Depends(get_db)
 ):
     try:
+        # Get the employee email before deleting
+        emp_result = db.execute(text("SELECT email FROM employees WHERE id = :id LIMIT 1"), {"id": id})
+        emp_record = emp_result.fetchone()
+        
+        if emp_record is None:
+            return {
+                "status": "ok",
+                "message": "Employee not found",
+                "data": None
+            }
+        
+        email = emp_record.email
+        
+        # Delete the employee record
         result = db.execute(text("DELETE FROM employees WHERE id = :id"), {"id": id})
+        
+        # Also delete the associated user account
+        if email:
+            db.execute(text("DELETE FROM users WHERE email = :email"), {"email": email})
+        
         db.commit()
 
         if result.rowcount == 0:

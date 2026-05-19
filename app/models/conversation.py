@@ -180,6 +180,12 @@ class LeaveApplication(Base):
 
     status = Column(Integer, nullable=True, default=0)
 
+    approver_id = Column(Integer, nullable=True)
+
+    approver_name = Column(String(100), nullable=True)
+
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
